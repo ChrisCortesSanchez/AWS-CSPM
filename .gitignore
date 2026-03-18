@@ -1,0 +1,18 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Output reports
+output/
+
+# AWS credentials (never commit these)
+.env
+*.csv
+
+# OS files
+.DS_Store
