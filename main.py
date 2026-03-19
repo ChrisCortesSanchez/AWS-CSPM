@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import config
 from utils.aws_client import init_session, get_account_id
