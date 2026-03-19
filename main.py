@@ -21,6 +21,7 @@ from scanners.s3 import S3Scanner
 from scanners.iam import IAMScanner
 from scanners.ec2 import EC2Scanner
 from scanners.cloudtrail import CloudTrailScanner
+from scanners.rds import RDSScanner
 from reports.json_report import generate_json_report
 from reports.html_report import generate_html_report
 

@@ -4,6 +4,7 @@ ENABLED_SCANNERS = {
     "iam": True,
     "ec2": True,
     "cloudtrail": True,
+    "rds": True,
 }
 
 # CIS AWS Benchmark version
