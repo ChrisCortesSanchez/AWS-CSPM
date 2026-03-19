@@ -46,32 +46,22 @@ class S3Scanner(BaseScanner):
                 config.get("BlockPublicPolicy", False),
                 config.get("RestrictPublicBuckets", False),
             ])
-            self._add_finding(Finding(
-                scanner="s3",
-                check_id="S3-001",
-                title="S3 Block Public Access not fully enabled",
-                description=f"Bucket '{bucket_name}' does not have all Block Public Access settings enabled.",
-                recommendation="Enable all 4 Block Public Access settings: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets.",
-                severity=Severity.HIGH,
-                resource=f"arn:aws:s3:::{bucket_name}",
-                region=self.region,
-                cis_control="2.1.5",
-                passed=all_blocked,
-            ))
-        except self.client.exceptions.NoSuchPublicAccessBlockConfiguration:
-            # No config set at all — same as all False
-            self._add_finding(Finding(
-                scanner="s3",
-                check_id="S3-001",
-                title="S3 Block Public Access not fully enabled",
-                description=f"Bucket '{bucket_name}' has no Block Public Access configuration.",
-                recommendation="Enable all 4 Block Public Access settings.",
-                severity=Severity.HIGH,
-                resource=f"arn:aws:s3:::{bucket_name}",
-                region=self.region,
-                cis_control="2.1.5",
-                passed=False,
-            ))
+        except Exception:
+            # No config set at all — treated as all False
+            all_blocked = False
+
+        self._add_finding(Finding(
+            scanner="s3",
+            check_id="S3-001",
+            title="S3 Block Public Access not fully enabled",
+            description=f"Bucket '{bucket_name}' does not have all Block Public Access settings enabled.",
+            recommendation="Enable all 4 Block Public Access settings: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, RestrictPublicBuckets.",
+            severity=Severity.HIGH,
+            resource=f"arn:aws:s3:::{bucket_name}",
+            region=self.region,
+            cis_control="2.1.5",
+            passed=all_blocked,
+        ))
 
     def _check_encryption(self, bucket_name: str):
         """CIS 2.1.1 - Bucket must have default server-side encryption enabled."""
