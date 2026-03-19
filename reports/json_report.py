@@ -1,24 +1,24 @@
 """
 JSON report generator.
-Outputs a structured JSON file with scan metadata and all failing findings.
+Outputs a structured JSON file with scan metadata, risk score, and findings.
 """
 import json
 from typing import List
 from datetime import datetime
-from utils.severity import Finding, SEVERITY_SCORE
+from utils.severity import Finding
 
 
 def generate_json_report(
     findings: List[Finding],
     account_id: str,
     region: str,
-    output_path: str
+    output_path: str,
+    risk: dict = None,
 ):
     """Write a JSON report to output_path."""
     failures = [f for f in findings if not f.passed]
     passed = [f for f in findings if f.passed]
 
-    # Count by severity
     severity_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     for f in failures:
         severity_counts[f.severity.value] += 1
@@ -33,6 +33,7 @@ def generate_json_report(
             "total_findings": len(failures),
             "total_passed": len(passed),
             "severity_counts": severity_counts,
+            "risk_score": risk or {},
         },
         "findings": sorted(
             [f.to_dict() for f in failures],

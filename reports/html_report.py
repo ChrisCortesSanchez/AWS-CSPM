@@ -24,14 +24,23 @@ SEVERITY_BG = {
     "INFO":     "#f9fafb",
 }
 
+GRADE_COLOR = {
+    "A": "#22c55e",
+    "B": "#22c55e",
+    "C": "#eab308",
+    "D": "#f97316",
+    "F": "#ef4444",
+}
+
 
 def generate_html_report(
     findings: List[Finding],
     account_id: str,
     region: str,
-    output_path: str
+    output_path: str,
+    risk: dict = None,
 ):
-    """Write a styled HTML report to output_path."""
+    risk = risk or {"score": 0, "grade": "F", "breakdown": {}}
     failures = sorted(
         [f for f in findings if not f.passed],
         key=lambda x: SEVERITY_ORDER.index(x.severity.value)
@@ -43,7 +52,14 @@ def generate_html_report(
     for f in failures:
         counts[f.severity.value] += 1
 
-    # Build summary cards
+    pass_pct = round((total_passed / total_checks * 100) if total_checks > 0 else 0)
+    bar_color = "#22c55e" if pass_pct >= 80 else "#eab308" if pass_pct >= 50 else "#ef4444"
+
+    grade = risk.get("grade", "F")
+    score = risk.get("score", 0)
+    grade_color = GRADE_COLOR.get(grade, "#ef4444")
+
+    # Summary cards
     cards_html = ""
     for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
         color = SEVERITY_COLOR[sev]
@@ -53,7 +69,7 @@ def generate_html_report(
             <div class="card-label" style="color:{color}">{sev}</div>
         </div>"""
 
-    # Build findings table rows
+    # Findings table rows
     rows_html = ""
     if not failures:
         rows_html = """
@@ -69,9 +85,7 @@ def generate_html_report(
             cis = f.cis_control or "—"
             rows_html += f"""
         <tr style="background:{bg}">
-            <td>
-                <span class="badge" style="background:{color}">{f.severity.value}</span>
-            </td>
+            <td><span class="badge" style="background:{color}">{f.severity.value}</span></td>
             <td><code>{f.check_id}</code></td>
             <td><strong>{f.title}</strong><br>
                 <small style="color:#6b7280">{f.description}</small>
@@ -80,10 +94,6 @@ def generate_html_report(
             <td style="text-align:center">{cis}</td>
             <td style="color:#374151;font-size:0.85rem">{f.recommendation}</td>
         </tr>"""
-
-    # Progress bar: % checks passed
-    pass_pct = round((total_passed / total_checks * 100) if total_checks > 0 else 0)
-    bar_color = "#22c55e" if pass_pct >= 80 else "#eab308" if pass_pct >= 50 else "#ef4444"
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -107,14 +117,25 @@ def generate_html_report(
     margin-bottom: 1.5rem;
   }}
   .header h1 {{ font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; }}
-  .header .meta {{ display: flex; gap: 2rem; font-size: 0.85rem; color: #94a3b8; }}
+  .header .meta {{ display: flex; gap: 2rem; font-size: 0.85rem; color: #94a3b8; flex-wrap: wrap; }}
   .header .meta span strong {{ color: #e2e8f0; }}
-  .summary {{
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+  .top-row {{ display: grid; grid-template-columns: 1fr auto; gap: 1rem; margin-bottom: 1.5rem; align-items: start; }}
+  .summary {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }}
+  .score-card {{
+    background: white;
+    border-radius: 10px;
+    padding: 1.25rem 2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 130px;
   }}
+  .score-number {{ font-size: 2.8rem; font-weight: 800; color: {grade_color}; line-height: 1; }}
+  .score-grade {{ font-size: 1.1rem; font-weight: 700; color: {grade_color}; margin-top: 0.15rem; }}
+  .score-label {{ font-size: 0.72rem; color: #94a3b8; margin-top: 0.25rem; text-transform: uppercase; letter-spacing: .05em; }}
   .card {{
     background: white;
     border-radius: 10px;
@@ -138,18 +159,12 @@ def generate_html_report(
     color: #64748b;
     margin-bottom: 0.5rem;
   }}
-  .progress-bar {{
-    background: #e2e8f0;
-    border-radius: 9999px;
-    height: 10px;
-    overflow: hidden;
-  }}
+  .progress-bar {{ background: #e2e8f0; border-radius: 9999px; height: 10px; overflow: hidden; }}
   .progress-fill {{
     height: 100%;
     border-radius: 9999px;
     background: {bar_color};
     width: {pass_pct}%;
-    transition: width 0.3s ease;
   }}
   .table-wrap {{
     background: white;
@@ -175,12 +190,7 @@ def generate_html_report(
     letter-spacing: .05em;
     text-transform: uppercase;
   }}
-  td {{
-    padding: 0.85rem 1rem;
-    border-bottom: 1px solid #f1f5f9;
-    font-size: 0.875rem;
-    vertical-align: top;
-  }}
+  td {{ padding: 0.85rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; vertical-align: top; }}
   tr:last-child td {{ border-bottom: none; }}
   .badge {{
     display: inline-block;
@@ -198,12 +208,7 @@ def generate_html_report(
     font-size: 0.8rem;
     color: #334155;
   }}
-  .footer {{
-    text-align: center;
-    color: #94a3b8;
-    font-size: 0.8rem;
-    margin-top: 1.5rem;
-  }}
+  .footer {{ text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top: 1.5rem; }}
 </style>
 </head>
 <body>
@@ -218,8 +223,15 @@ def generate_html_report(
   </div>
 </div>
 
-<div class="summary">
-  {cards_html}
+<div class="top-row">
+  <div class="summary">
+    {cards_html}
+  </div>
+  <div class="score-card">
+    <div class="score-number">{score}</div>
+    <div class="score-grade">Grade: {grade}</div>
+    <div class="score-label">Security Score</div>
+  </div>
 </div>
 
 <div class="progress-wrap">
@@ -252,9 +264,7 @@ def generate_html_report(
 </div>
 
 <div class="footer">
-  Generated by AWS CSPM Scanner &nbsp;|&nbsp; CIS AWS Benchmark v{
-    __import__('config').CIS_BENCHMARK_VERSION
-  }
+  Generated by AWS CSPM Scanner &nbsp;|&nbsp; CIS AWS Benchmark v1.5.0
 </div>
 
 </body>

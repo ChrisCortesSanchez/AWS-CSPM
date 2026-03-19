@@ -13,10 +13,11 @@ import os
 import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.abspath(os.getcwd()))
 
 import config
 from utils.aws_client import init_session, get_account_id
+from utils.severity import calculate_risk_score
 from scanners.s3 import S3Scanner
 from scanners.iam import IAMScanner
 from scanners.ec2 import EC2Scanner
@@ -31,9 +32,19 @@ SCANNERS = {
     "iam": IAMScanner,
     "ec2": EC2Scanner,
     "cloudtrail": CloudTrailScanner,
+    "rds": RDSScanner,
 }
 
 SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+
+GRADE_COLOR = {
+    "A": "\033[92m",
+    "B": "\033[92m",
+    "C": "\033[93m",
+    "D": "\033[93m",
+    "F": "\033[91m",
+}
+RESET = "\033[0m"
 
 
 def print_banner(account_id: str, region: str):
@@ -59,6 +70,11 @@ def print_final_summary(all_findings: list, scanners_run: list, output_paths: li
     for f in failures:
         counts[f.severity.value] += 1
 
+    risk = calculate_risk_score(all_findings)
+    grade = risk["grade"]
+    score = risk["score"]
+    color = GRADE_COLOR.get(grade, "")
+
     print("\n" + "=" * 62)
     print(f"  Scan Complete: {len(failures)} findings across {len(scanners_run)} scanner(s)")
     print("=" * 62)
@@ -67,37 +83,27 @@ def print_final_summary(all_findings: list, scanners_run: list, output_paths: li
     print(f"  MEDIUM   : {counts['MEDIUM']}")
     print(f"  LOW      : {counts['LOW']}")
     print("-" * 62)
+    print(f"  Security Score : {color}{score}/100 (Grade: {grade}){RESET}")
+    print("-" * 62)
     for path in output_paths:
         print(f"  Report   : {path}")
     print("=" * 62 + "\n")
 
 
 @click.command()
-@click.option(
-    "--profile", default=None,
-    help="AWS CLI profile name (uses default credentials if not set)"
-)
-@click.option(
-    "--region", default="us-east-1", show_default=True,
-    help="AWS region to scan"
-)
+@click.option("--profile", default=None, help="AWS CLI profile name")
+@click.option("--region", default="us-east-1", show_default=True, help="AWS region to scan")
 @click.option(
     "--output", default="html",
     type=click.Choice(["json", "html", "both"], case_sensitive=False),
-    show_default=True,
-    help="Output report format"
+    show_default=True, help="Output report format"
 )
 @click.option(
     "--scanners", default="all",
-    help="Comma-separated scanners to run: s3,iam,ec2,cloudtrail (default: all)"
+    help="Comma-separated scanners to run: s3,iam,ec2,cloudtrail,rds (default: all)"
 )
 def main(profile, region, output, scanners):
-    """AWS Cloud Security Posture Management (CSPM) Scanner.
-
-    Scans your AWS account for misconfigurations mapped to CIS Benchmark
-    controls and generates a severity-scored report.
-    """
-    # Initialize AWS session
+    """AWS Cloud Security Posture Management (CSPM) Scanner."""
     init_session(profile=profile, region=region)
 
     try:
@@ -108,7 +114,6 @@ def main(profile, region, output, scanners):
 
     print_banner(account_id, region)
 
-    # Resolve which scanners to run
     if scanners.lower() == "all":
         active = [k for k, v in config.ENABLED_SCANNERS.items() if v]
     else:
@@ -119,36 +124,33 @@ def main(profile, region, output, scanners):
             print(f"    Valid options: {', '.join(SCANNERS.keys())}")
             raise SystemExit(1)
 
-    # Run each scanner
     all_findings = []
     print("Running scanners...\n")
 
     for name in active:
         print(f"  Scanning {name.upper()}...")
         scanner = SCANNERS[name](region=region)
-
         try:
             findings = scanner.run()
         except Exception as e:
             print(f"  [!] {name.upper()} scanner error: {e}")
             continue
-
         all_findings.extend(findings)
         print_scanner_summary(name, scanner.summary())
 
-    # Generate reports
     os.makedirs(config.OUTPUT_DIR, exist_ok=True)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    risk = calculate_risk_score(all_findings)
     output_paths = []
 
     if output in ("json", "both"):
         path = os.path.join(config.OUTPUT_DIR, f"cspm_report_{timestamp}.json")
-        generate_json_report(all_findings, account_id, region, path)
+        generate_json_report(all_findings, account_id, region, path, risk)
         output_paths.append(path)
 
     if output in ("html", "both"):
         path = os.path.join(config.OUTPUT_DIR, f"cspm_report_{timestamp}.html")
-        generate_html_report(all_findings, account_id, region, path)
+        generate_html_report(all_findings, account_id, region, path, risk)
         output_paths.append(path)
 
     print_final_summary(all_findings, active, output_paths)
